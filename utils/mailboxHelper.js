@@ -6,7 +6,7 @@ async function getOrCreateMailbox(guild, user) {
     let channel = guild.channels.cache.find(c => c.name === channelName);
 
     if (!channel) {
-        // Find or create Category
+        // 1. Find or create Category with Strict Deny
         let category = guild.channels.cache.find(c => c.name === '📫 MAILBOXES' && c.type === ChannelType.GuildCategory);
         if (!category) {
             category = await guild.channels.create({
@@ -14,37 +14,38 @@ async function getOrCreateMailbox(guild, user) {
                 type: ChannelType.GuildCategory,
                 permissionOverwrites: [
                     {
-                        id: guild.id,
+                        id: guild.id, // @everyone
                         deny: [PermissionFlagsBits.ViewChannel]
                     }
                 ]
             });
         }
 
+        // 2. Create Channel with explicitly restricted permissions
         channel = await guild.channels.create({
             name: channelName,
             type: ChannelType.GuildText,
             parent: category.id,
             permissionOverwrites: [
                 {
-                    id: guild.id,
+                    id: guild.id, // Deny for EVERYONE baseline
                     deny: [PermissionFlagsBits.ViewChannel]
                 },
                 {
-                    id: user.id,
+                    id: user.id, // Allow ONLY for the owner
                     allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
-                    deny: [PermissionFlagsBits.SendMessages]
+                    deny: [PermissionFlagsBits.SendMessages] // Owner reads only
                 },
                 {
-                    id: guild.members.me.id,
-                    allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]
+                    id: guild.members.me.id, // Allow for the BOT
+                    allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks]
                 }
             ]
         });
 
         const welcomeEmbed = new EmbedBuilder()
-            .setTitle('📬 Your Personal Mailbox')
-            .setDescription(`Welcome ${user}! This is your private inbox where you will receive important notifications from the server staff and system.`)
+            .setTitle('📬 Personal Mailbox')
+            .setDescription(`Welcome ${user}! This is your private inbox.\nOnly you and the bot can see this channel.`)
             .setColor('Blue')
             .setTimestamp();
 
