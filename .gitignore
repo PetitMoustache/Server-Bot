@@ -1,0 +1,10 @@
+node_modules/
+.env
+data/*.json
+data/settings.json
+data/tickets.json
+data/mutes.json
+data/mailbox.json
+package-lock.json
+*.log
+.DS_Store
