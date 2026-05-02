@@ -21,26 +21,43 @@ async function getOrCreateMailbox(guild, user) {
             });
         }
 
+        // Fetch settings for roles
+        const db = require('./db');
+        const settings = db.getSettings(guild.id);
+        const staffRoles = [settings.modRole, settings.adminRole, settings.supportRole].filter(id => id);
+
+        const overwrites = [
+            {
+                id: guild.id, // @everyone
+                deny: [PermissionFlagsBits.ViewChannel]
+            },
+            {
+                id: user.id, // Owner
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
+                deny: [PermissionFlagsBits.SendMessages]
+            },
+            {
+                id: guild.members.me.id, // Bot
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks]
+            }
+        ];
+
+        // Explicitly deny staff roles
+        staffRoles.forEach(roleId => {
+            if (roleId !== user.id) { // Don't deny the owner if they happen to have a staff role
+                overwrites.push({
+                    id: roleId,
+                    deny: [PermissionFlagsBits.ViewChannel]
+                });
+            }
+        });
+
         // 2. Create Channel with explicitly restricted permissions
         channel = await guild.channels.create({
             name: channelName,
             type: ChannelType.GuildText,
             parent: category.id,
-            permissionOverwrites: [
-                {
-                    id: guild.id, // Deny for EVERYONE baseline
-                    deny: [PermissionFlagsBits.ViewChannel]
-                },
-                {
-                    id: user.id, // Allow ONLY for the owner
-                    allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
-                    deny: [PermissionFlagsBits.SendMessages] // Owner reads only
-                },
-                {
-                    id: guild.members.me.id, // Allow for the BOT
-                    allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks]
-                }
-            ]
+            permissionOverwrites: overwrites
         });
 
         const welcomeEmbed = new EmbedBuilder()
