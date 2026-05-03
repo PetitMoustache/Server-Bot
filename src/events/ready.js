@@ -1,5 +1,6 @@
 const { Events } = require('discord.js');
 const statsUpdater = require('../utils/statsUpdater');
+const db = require('../database/db');
 
 module.exports = {
     name: Events.ClientReady,
@@ -52,7 +53,7 @@ module.exports = {
                     for (const guildId in ticketsData) {
                         const guild = client.guilds.cache.get(guildId);
                         if (!guild) continue;
-                        const guildSettings = require('../utils/db').getSettings(guildId);
+                        const guildSettings = require('../database/db').getSettings(guildId);
                         for (const ticketId in ticketsData[guildId]) {
                             const ticket = ticketsData[guildId][ticketId];
                             if (ticket.status === 'pending' && now - ticket.createdAt > 10 * 60 * 1000 && !ticket.escalated) {

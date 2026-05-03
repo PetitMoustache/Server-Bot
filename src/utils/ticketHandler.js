@@ -26,7 +26,7 @@ module.exports = async (interaction) => {
 
   // ---------------- RATING HANDLING ----------------
   if (type === "rate") {
-    const score = parts[2]; // score (1-5)
+    const score = parseInt(parts[2]); // score (1-5)
     const tId = parts[3]; // ticketId
     const modId = parts[4]; // modId
 
@@ -34,7 +34,10 @@ module.exports = async (interaction) => {
 
     // Log rating
     const logger = require('./logger');
+    const { addRating } = require('./staffStats');
     const mod = await interaction.client.users.fetch(modId).catch(() => ({ tag: 'Unknown' }));
+    
+    addRating(interaction.guild.id, modId, score);
     await logger.logAction(interaction.client, 'Ticket Rated', interaction.user, mod, `Ticket #${tId} rated with ${score} stars.`, interaction.guild);
     return;
   }
@@ -61,6 +64,11 @@ module.exports = async (interaction) => {
       allData[guild.id][ticketId].status = "accepted";
       allData[guild.id][ticketId].acceptedBy = interaction.user.id;
       require('fs').writeFileSync(require('path').join(__dirname, "..", "data", "tickets.json"), JSON.stringify(allData, null, 2));
+
+      // Record Stats
+      const { recordResponse } = require('./staffStats');
+      const responseTime = Date.now() - ticket.createdAt;
+      recordResponse(guild.id, interaction.user.id, responseTime);
 
       const channel = await guild.channels.create({
         name: `Ticket With ${user.user.username}`,
