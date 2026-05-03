@@ -1,45 +1,61 @@
-const { Events, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const { getGuildData } = require('../database/db');
-const { sendToMailbox } = require('../systems/mailboxSystem');
+const { Events, EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { getGuildData, load, save } = require('../database/db');
+const ticketSystem = require('../systems/ticketSystem');
+
+const userCommands = [
+  "ticket",
+  "leaderboard",
+  "help",
+  "mailbox",
+  "profile",
+  "report",
+  "reputation",
+  "suggest"
+];
 
 module.exports = {
     name: Events.InteractionCreate,
     async execute(interaction, client) {
         if (!interaction.guild) return;
 
-        const guildData = getGuildData(interaction.guild.id);
-        const settings = guildData.settings;
-
         // 1. Slash Commands
         if (interaction.isChatInputCommand()) {
+            const isMod = interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers);
+
+            if (!isMod && !userCommands.includes(interaction.commandName)) {
+                return interaction.reply({
+                    content: "Only moderators can use this command ❌",
+                    ephemeral: true
+                });
+            }
+
             const command = client.commands.get(interaction.commandName);
             if (!command) return;
-
-            // Permission Check for Admin/Mod Commands
-            const adminOnly = ['set'];
-            if (adminOnly.includes(command.data.name) && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-                return interaction.reply({ content: "⛔ You need Administrator permissions for this.", ephemeral: true });
-            }
 
             try {
                 await command.execute(interaction, client);
             } catch (error) {
-                console.error(error);
-                await interaction.reply({ content: 'There was an error executing this command!', ephemeral: true });
+                console.error(`[COMMAND ERROR] ${interaction.commandName}:`, error);
+                const reply = { content: 'There was an error executing this command!', ephemeral: true };
+                if (interaction.replied || interaction.deferred) await interaction.followUp(reply);
+                else await interaction.reply(reply);
             }
         } 
         
-        // 2. Buttons & Select Menus
-        else if (interaction.isButton() || interaction.isStringSelectMenu()) {
-            // Mailbox Logic (Simplified for brevity, can be expanded)
-            if (interaction.customId.startsWith('mail_')) {
-                // handle mailbox interactions using mailboxSystem
+        // 2. Buttons
+        else if (interaction.isButton()) {
+            // Ticket System Buttons
+            if (interaction.customId.startsWith('ticket_')) {
+                return ticketSystem.handleButtons(interaction);
             }
 
-            // Ticket Logic (Forward to ticket system)
-            if (interaction.customId.startsWith('ticket_')) {
-                // Logic for ticket buttons
+            // Mailbox Logic (Optional: can be moved to mailboxSystem too)
+            if (interaction.customId.startsWith('mail_')) {
+                // handle mailbox buttons...
             }
         }
     }
+
+
 };
+
