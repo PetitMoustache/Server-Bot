@@ -1,5 +1,6 @@
 const { ChannelType, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const mailboxDb = require('./mailboxDb');
+const { getSettings } = require('../database/db');
 
 async function getOrCreateMailbox(guild, user) {
     const channelName = `mailbox-${user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
@@ -25,8 +26,7 @@ async function getOrCreateMailbox(guild, user) {
             });
         }
 
-        const db = require('../database/db');
-        const settings = db.getSettings(guild.id);
+        const settings = await getSettings(guild.id);
         const staffRoles = [settings.modRole, settings.adminRole, settings.supportRole].filter(id => id);
 
         const overwrites = [
@@ -125,7 +125,7 @@ ${details}
 
         await channel.send({ embeds: [embed] });
         
-        mailboxDb.addMessage(user.id, guild.id, type, details, senderId, finalSubject);
+        await mailboxDb.addMessage(user.id, guild.id, type, details, senderId, finalSubject);
 
         return true;
     } catch (e) {
@@ -134,8 +134,8 @@ ${details}
     }
 }
 
-function createDashboard(user, guild) {
-    const messages = mailboxDb.getMessages(user.id, guild.id);
+async function createDashboard(user, guild) {
+    const messages = await mailboxDb.getMessages(user.id, guild.id);
     const unreadCount = messages.filter(m => m.status === 'unread').length;
 
     const embed = new EmbedBuilder()
@@ -159,8 +159,9 @@ function createDashboard(user, guild) {
     return { embeds: [embed], components: [row] };
 }
 
-function createInbox(user, guild, page = 0) {
-    const messages = [...mailboxDb.getMessages(user.id, guild.id)].reverse();
+async function createInbox(user, guild, page = 0) {
+    const allMessages = await mailboxDb.getMessages(user.id, guild.id);
+    const messages = [...allMessages].reverse();
     const perPage = 5;
     const totalPages = Math.ceil(messages.length / perPage);
     const start = page * perPage;
@@ -208,7 +209,7 @@ function createInbox(user, guild, page = 0) {
     return { embeds: [embed], components: rows };
 }
 
-function createMessageView(message) {
+async function createMessageView(message) {
     const embed = new EmbedBuilder()
         .setTitle(`📖 ${message.subject}`)
         .setDescription(message.content)

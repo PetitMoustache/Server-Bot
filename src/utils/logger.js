@@ -3,8 +3,9 @@ const db = require('../database/db');
 
 module.exports = {
     logAction: async (client, action, user, moderator, reason, guild) => {
-        const settings = db.getSettings(guild.id);
+        const settings = await db.getSettings(guild.id);
         const logChannelId = settings.logsChannel;
+
         
         if (!logChannelId) {
             console.log(`[LOG] ${action}: ${user.tag} by ${moderator.tag}. Reason: ${reason}`);

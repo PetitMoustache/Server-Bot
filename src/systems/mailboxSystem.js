@@ -1,12 +1,12 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
 /**
- * 📬 MAILX SYSTEM - PERSISTENT LAYER
+ * 📬 MAILX SYSTEM - PERSISTENT LAYER (MongoDB Migration)
  */
 
 async function open(interaction) {
     const { createDashboard } = require('../utils/mailboxHelper');
-    const dashboard = createDashboard(interaction.user, interaction.guild);
+    const dashboard = await createDashboard(interaction.user, interaction.guild);
     return interaction.reply({ ...dashboard, ephemeral: true });
 }
 
@@ -43,7 +43,7 @@ async function compose(interaction) {
 
 async function read(interaction) {
     const { createInbox } = require('../utils/mailboxHelper');
-    const inbox = createInbox(interaction.user, interaction.guild);
+    const inbox = await createInbox(interaction.user, interaction.guild);
     return interaction.reply({ ...inbox, ephemeral: true });
 }
 
@@ -53,13 +53,13 @@ async function handleButtons(interaction) {
     const [prefix, action, extra] = interaction.customId.split('_');
 
     if (action === 'dash') {
-        const dashboard = createDashboard(interaction.user, interaction.guild);
+        const dashboard = await createDashboard(interaction.user, interaction.guild);
         return interaction.update(dashboard);
     }
 
     if (action === 'inbox') {
         const page = parseInt(extra) || 0;
-        const inbox = createInbox(interaction.user, interaction.guild, page);
+        const inbox = await createInbox(interaction.user, interaction.guild, page);
         return interaction.update(inbox);
     }
 
@@ -68,14 +68,14 @@ async function handleButtons(interaction) {
     }
 
     if (action === 'clear') {
-        mailboxDb.clearMailbox(interaction.user.id, interaction.guild.id);
-        const dashboard = createDashboard(interaction.user, interaction.guild);
+        await mailboxDb.clearMailbox(interaction.user.id, interaction.guild.id);
+        const dashboard = await createDashboard(interaction.user, interaction.guild);
         return interaction.update(dashboard);
     }
 
     if (action === 'delete') {
-        mailboxDb.deleteMessage(interaction.user.id, interaction.guild.id, extra);
-        const inbox = createInbox(interaction.user, interaction.guild, 0);
+        await mailboxDb.deleteMessage(interaction.user.id, interaction.guild.id, extra);
+        const inbox = await createInbox(interaction.user, interaction.guild, 0);
         return interaction.update(inbox);
     }
 
@@ -99,11 +99,11 @@ async function handleSelectMenu(interaction) {
     
     if (interaction.customId === 'mail_view_select') {
         const messageId = interaction.values[0];
-        const message = mailboxDb.getMessageById(interaction.user.id, interaction.guild.id, messageId);
+        const message = await mailboxDb.getMessageById(interaction.user.id, interaction.guild.id, messageId);
         
         if (!message) return interaction.reply({ content: '❌ Message not found.', ephemeral: true });
 
-        mailboxDb.markAsRead(interaction.user.id, interaction.guild.id, messageId);
+        await mailboxDb.markAsRead(interaction.user.id, interaction.guild.id, messageId);
         const view = createMessageView(message);
         return interaction.update(view);
     }

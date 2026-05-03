@@ -5,7 +5,7 @@ const logger = require('./logger');
 // userId -> { actionType, content, timestamp, count, isBlocked, blockExpiresAt }
 const abuseTracker = new Map();
 
-function checkAbuse(interaction, type, content) {
+async function checkAbuse(interaction, type, content) {
     const userId = interaction.user.id;
     const now = Date.now();
     const userData = abuseTracker.get(userId) || { count: 0, isBlocked: false, blockExpiresAt: 0 };
@@ -67,7 +67,7 @@ function checkAbuse(interaction, type, content) {
 
         // Send to logs channel
         const db = require('../database/db');
-        const settings = db.getSettings(interaction.guild.id);
+        const settings = await db.getSettings(interaction.guild.id);
         const logsChannel = interaction.guild.channels.cache.get(settings.logsChannel);
         if (logsChannel) logsChannel.send({ embeds: [staffEmbed] });
 

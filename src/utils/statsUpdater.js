@@ -7,8 +7,9 @@ module.exports = {
         for (const guild of guilds) {
             if (!guild) continue;
 
-            const settings = db.getSettings(guild.id);
+            const settings = await db.getSettings(guild.id);
             if (!settings.statsEnabled) continue;
+
 
             try {
                 if (settings.statsOnlineChannelId) {

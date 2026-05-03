@@ -1,54 +1,47 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
-const { load, save } = require("../../database/db");
+const { getGuildData } = require("../../database/db");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("set")
     .setDescription("Server configuration")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addSubcommand(s =>
-      s.setName("channel")
-        .setDescription("Set bot channels")
-        .addChannelOption(o => o.setName("tickets").setDescription("Tickets channel"))
-        .addChannelOption(o => o.setName("logs").setDescription("Logs channel"))
-        .addChannelOption(o => o.setName("reports").setDescription("Reports channel"))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addSubcommand(sub =>
+      sub.setName("role")
+        .setDescription("Set server roles")
+        .addRoleOption(o =>
+          o.setName("owner")
+            .setDescription("Owner role")
+        )
+        .addRoleOption(o =>
+          o.setName("moderator")
+            .setDescription("Moderator role")
+        )
+        .addRoleOption(o =>
+          o.setName("helper")
+            .setDescription("Helper role")
+        )
     ),
 
   async execute(interaction) {
-    const db = load("guilds");
-    const guildId = interaction.guild.id;
+    const db = await getGuildData(interaction.guild.id);
+    if (!db) return interaction.reply({ content: "❌ Database error.", ephemeral: true });
 
-    if (!db[guildId]) db[guildId] = { settings: {}, tickets: [], members: {} };
-    if (!db[guildId].settings) db[guildId].settings = {};
+    const owner = interaction.options.getRole("owner");
+    const mod = interaction.options.getRole("moderator");
+    const helper = interaction.options.getRole("helper");
 
-    const tickets = interaction.options.getChannel("tickets");
-    const logs = interaction.options.getChannel("logs");
-    const reports = interaction.options.getChannel("reports");
+    let updated = false;
+    if (owner) { db.roles.owner = owner.id; updated = true; }
+    if (mod) { db.roles.moderator = mod.id; updated = true; }
+    if (helper) { db.roles.helper = helper.id; updated = true; }
 
-    let summary = [];
-    if (tickets) { 
-        db[guildId].settings.ticketsChannel = tickets.id; 
-        summary.push(`🎫 Tickets: ${tickets}`);
-    }
-    if (logs) { 
-        db[guildId].settings.logsChannel = logs.id; 
-        summary.push(`📜 Logs: ${logs}`);
-    }
-    if (reports) { 
-        db[guildId].settings.reportsChannel = reports.id; 
-        summary.push(`🚨 Reports: ${reports}`);
+    if (!updated) {
+        return interaction.reply({ content: "❌ Please specify at least one role to set.", ephemeral: true });
     }
 
-    if (summary.length > 0) {
-        save("guilds", db);
-        return interaction.reply({ 
-            content: `**Configuration Updated ✅**\n${summary.join("\n")}\n\n*All settings saved persistently.*`, 
-            ephemeral: true 
-        });
-    } else {
-        return interaction.reply({ content: "❌ Please specify at least one channel to configure.", ephemeral: true });
-    }
+    await db.save();
+
+    interaction.reply("Roles configured successfully ✅");
   }
 };
-
-

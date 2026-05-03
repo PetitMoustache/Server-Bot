@@ -1,52 +1,44 @@
-const { load, save } = require("../database/db");
+const User = require("../models/User");
 
 const xpCooldown = new Map();
 
-function addXP(userId, guildId) {
-  const db = load("guilds");
+async function addXP(userId, guildId) {
+  try {
+    let user = await User.findOne({ userId, guildId });
+    
+    if (!user) {
+      user = await User.create({ userId, guildId });
+    }
 
-  if (!db[guildId]) {
-    db[guildId] = { settings: {}, tickets: [], members: {} };
-  }
-  
-  if (!db[guildId].members) db[guildId].members = {};
+    const key = `${userId}_${guildId}`;
+    const now = Date.now();
 
-  if (!db[guildId].members[userId]) {
-    db[guildId].members[userId] = {
-      xp: 0,
-      level: 1,
-      rep: 0
-    };
-  }
+    // 10 second cooldown for XP gain
+    if (xpCooldown.has(key) && now - xpCooldown.get(key) < 10000) {
+      return null;
+    }
 
-  const key = `${userId}_${guildId}`;
-  const now = Date.now();
+    xpCooldown.set(key, now);
 
-  // 10 second cooldown for XP gain
-  if (xpCooldown.has(key) && now - xpCooldown.get(key) < 10000) {
+    const gain = Math.floor(Math.random() * 10) + 5;
+    user.xp += gain;
+
+    const needed = user.level * 100;
+    let leveledUp = false;
+
+    if (user.xp >= needed) {
+      user.xp = 0;
+      user.level++;
+      leveledUp = true;
+    }
+
+    await user.save();
+
+    return { gain, level: user.level, leveledUp };
+  } catch (err) {
+    console.error(`[XP SYSTEM] Error adding XP for ${userId}:`, err);
     return null;
   }
-
-  xpCooldown.set(key, now);
-
-  const user = db[guildId].members[userId];
-
-  const gain = Math.floor(Math.random() * 10) + 5;
-  user.xp += gain;
-
-  const needed = user.level * 100;
-
-  let leveledUp = false;
-
-  if (user.xp >= needed) {
-    user.xp = 0;
-    user.level++;
-    leveledUp = true;
-  }
-
-  save("guilds", db);
-
-  return { gain, level: user.level, leveledUp };
 }
 
 module.exports = { addXP };

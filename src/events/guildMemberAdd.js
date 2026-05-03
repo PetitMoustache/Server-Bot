@@ -5,7 +5,8 @@ module.exports = {
     name: Events.GuildMemberAdd,
     async execute(member) {
         const guild = member.guild;
-        const settings = getSettings(guild.id);
+        const settings = await getSettings(guild.id);
+
         
         // Find a channel to welcome the user
         // Priority: 1. Configured welcome channel (if added to settings) 2. System channel 3. First text channel

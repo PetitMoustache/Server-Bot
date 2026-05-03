@@ -1,23 +1,23 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits } = require("discord.js");
-const { load, save, getSettings } = require("../database/db");
+const { getGuildData, getSettings } = require("../database/db");
 const logger = require("../utils/logger");
 const { sendToMailbox } = require("../utils/mailboxHelper");
 
 /**
- * 🎫 TICKET SYSTEM - LOGIC LAYER
+ * 🎫 TICKET SYSTEM - LOGIC LAYER (MongoDB Migration)
  */
 
 async function open(interaction) {
     const reason = interaction.options.getString("reason") || "No reason provided";
     const guild = interaction.guild;
-    const db = load("guilds");
+    const db = await getGuildData(guild.id);
     
-    // Inicializar DB si no existe
-    if (!db[guild.id]) db[guild.id] = { settings: {}, tickets: [] };
-    const settings = db[guild.id].settings || {};
+    if (!db) return interaction.reply({ content: "❌ Database error. Please try again later.", ephemeral: true });
+    
+    const settings = db.settings || {};
     
     // VALIDATION: No duplicar tickets
-    const existingTicket = db[guild.id].tickets?.find(t => t.userId === interaction.user.id && (t.status === "pending" || t.status === "active"));
+    const existingTicket = db.tickets?.find(t => t.userId === interaction.user.id && (t.status === "pending" || t.status === "active"));
     if (existingTicket) {
         return interaction.reply({ 
             content: `❌ **You already have an open ticket!** (#${existingTicket.id})\nWait for staff to respond or close your current ticket.`, 
@@ -73,8 +73,7 @@ async function open(interaction) {
         const msg = await targetChannel.send({ embeds: [ticketEmbed], components: [buttons] });
 
         // Guardar en DB
-        if (!db[guild.id].tickets) db[guild.id].tickets = [];
-        db[guild.id].tickets.push({
+        db.tickets.push({
             id: ticketId,
             userId: interaction.user.id,
             reason: reason,
@@ -82,7 +81,7 @@ async function open(interaction) {
             messageId: msg.id,
             createdAt: Date.now()
         });
-        save("guilds", db);
+        await db.save();
 
         // LOGGING
         await logger.logAction(interaction.client, "Ticket Opened", interaction.user, interaction.user, `Ticket #${ticketId} created. Reason: ${reason}`, guild);
@@ -99,15 +98,15 @@ async function open(interaction) {
 
 async function close(interaction) {
     const id = interaction.options.getString("id").toUpperCase();
-    const db = load("guilds");
-    const tickets = db[interaction.guild.id]?.tickets || [];
-    
-    const ticket = tickets.find(t => t.id === id);
+    const db = await getGuildData(interaction.guild.id);
+    if (!db) return interaction.reply({ content: "❌ Database error.", ephemeral: true });
+
+    const ticket = db.tickets.find(t => t.id === id);
     if (!ticket) return interaction.reply({ content: "❌ Ticket not found.", ephemeral: true });
 
     ticket.status = "closed";
     ticket.closedAt = Date.now();
-    save("guilds", db);
+    await db.save();
 
     // Si estamos en un canal de ticket, podemos intentar borrarlo
     if (interaction.channel.name.includes("ticket-")) {
@@ -124,12 +123,10 @@ async function close(interaction) {
 }
 
 async function list(interaction) {
-    const db = load("guilds");
-    const tickets = db[interaction.guild.id]?.tickets || [];
-    
-    if (tickets.length === 0) return interaction.reply({ content: "No tickets in database.", ephemeral: true });
+    const db = await getGuildData(interaction.guild.id);
+    if (!db || db.tickets.length === 0) return interaction.reply({ content: "No tickets in database.", ephemeral: true });
 
-    const recent = tickets.slice(-10).reverse();
+    const recent = db.tickets.slice(-10).reverse();
     const listEmbed = new EmbedBuilder()
         .setTitle("🎫 Recent Tickets")
         .setColor("Blue")
@@ -146,7 +143,9 @@ async function handleButtons(interaction) {
     if (prefix !== "ticket") return;
 
     await interaction.deferReply({ ephemeral: true });
-    const db = load("guilds");
+    const db = await getGuildData(interaction.guild.id);
+    if (!db) return interaction.editReply("❌ Database error.");
+    
     const guild = interaction.guild;
 
     // 1. ACEPTAR TICKET
@@ -166,11 +165,11 @@ async function handleButtons(interaction) {
             });
 
             // Update DB
-            const t = db[guild.id].tickets.find(x => x.id === ticketId);
+            const t = db.tickets.find(x => x.id === ticketId);
             if (t) {
                 t.status = "active";
                 t.channelId = channel.id;
-                save("guilds", db);
+                await db.save();
             }
 
             const welcome = new EmbedBuilder()
@@ -213,10 +212,10 @@ async function handleButtons(interaction) {
 
     // 2. DENEGAR TICKET
     if (action === "deny") {
-        const t = db[guild.id].tickets.find(x => x.id === ticketId);
+        const t = db.tickets.find(x => x.id === ticketId);
         if (t) {
             t.status = "denied";
-            save("guilds", db);
+            await db.save();
         }
         await interaction.message.delete().catch(() => {});
         await interaction.editReply("❌ **Ticket denied.** The user has been notified.");
@@ -233,16 +232,20 @@ async function handleButtons(interaction) {
 
     // 3. CERRAR TICKET (Boton dentro del canal)
     if (action === "close") {
-        // Solo moderadores
-        if (!interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+        // Solo moderadores (check con roles configurados)
+        const staffRoles = [db.settings.modRole, db.settings.adminRole].filter(id => id);
+        const isStaff = interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers) || 
+                        interaction.member.roles.cache.some(r => staffRoles.includes(r.id));
+
+        if (!isStaff) {
             return interaction.editReply("❌ Only staff can close tickets.");
         }
 
-        const t = db[guild.id].tickets.find(x => x.id === userId); // En este caso, el ID del ticket viene en la posicion de userId por el split
+        const t = db.tickets.find(x => x.id === userId); // En este caso, el ID del ticket viene en la posicion de userId por el split
         if (t) {
             t.status = "closed";
             t.closedAt = Date.now();
-            save("guilds", db);
+            await db.save();
         }
 
         await interaction.editReply("🔒 **Closing ticket in 5 seconds...**");

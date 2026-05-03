@@ -46,10 +46,12 @@ module.exports = {
             }
             
             // Anti-Abuse Check
-            if (checkAbuse(interaction, 'report', reason)) return;
+            if (await checkAbuse(interaction, 'report', reason)) return;
 
-            const settings = db.getSettings(interaction.guild.id);
+
+            const settings = await db.getSettings(interaction.guild.id);
             const reportsChannelId = settings.reportsChannel;
+
 
             if (!reportsChannelId) {
                 return interaction.reply({ content: '❌ Reports channel is not configured. Ask an admin to use `/set channel`.', ephemeral: true });
@@ -89,8 +91,9 @@ module.exports = {
                 return interaction.reply({ content: '❌ You do not have permission to view reports.', ephemeral: true });
             }
             
-            const settings = db.getSettings(interaction.guild.id);
+            const settings = await db.getSettings(interaction.guild.id);
             const reportsChannelId = settings.reportsChannel;
+
             
             if (!reportsChannelId) return interaction.reply({ content: '❌ Reports channel not configured.', ephemeral: true });
             

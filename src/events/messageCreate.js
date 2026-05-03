@@ -9,7 +9,8 @@ module.exports = {
         if (message.author.bot || !message.guild) return;
 
         // 1. XP System
-        const xpRes = addXP(message.author.id, message.guild.id);
+        const xpRes = await addXP(message.author.id, message.guild.id);
+
         if (xpRes && xpRes.leveledUp) {
             message.channel.send(`🎉 ${message.author} reached level **${xpRes.level}**!`);
         }
@@ -30,8 +31,9 @@ module.exports = {
         }
 
         // 3. User Memory & Staff Check
-        const guildData = getGuildData(message.guild.id);
-        const settings = guildData.settings;
+        const guildData = await getGuildData(message.guild.id);
+        const settings = guildData?.settings || {};
+
         const isStaff = message.member.permissions.has(PermissionFlagsBits.ManageMessages) || 
                        message.member.roles.cache.has(settings.modRole) ||
                        message.member.roles.cache.has(settings.adminRole);

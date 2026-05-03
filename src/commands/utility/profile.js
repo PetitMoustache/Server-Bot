@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require("discord.js");
-const { load } = require("../../database/db");
+const User = require("../../models/User");
 
 function getBar(current, max, size = 10) {
   const percent = Math.min(Math.max(current / max, 0), 1);
@@ -26,8 +26,7 @@ module.exports = {
     const target = interaction.options.getUser("user") || interaction.user;
     const member = await interaction.guild.members.fetch(target.id).catch(() => null);
 
-    const db = load("guilds");
-    const data = db[interaction.guild.id]?.members?.[target.id] || {
+    const data = await User.findOne({ userId: target.id, guildId: interaction.guild.id }) || {
       level: 1,
       xp: 0,
       rep: 0

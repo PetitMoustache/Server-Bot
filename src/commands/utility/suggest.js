@@ -19,10 +19,12 @@ module.exports = {
         const title = interaction.options.getString('title');
         const description = interaction.options.getString('description');
         
-        if (checkAbuse(interaction, 'suggestion', description)) return;
+        if (await checkAbuse(interaction, 'suggestion', description)) return;
 
-        const settings = db.getSettings(interaction.guild.id);
+
+        const settings = await db.getSettings(interaction.guild.id);
         const suggestionChannelId = settings.suggestionsChannel;
+
 
         if (!suggestionChannelId) {
             return interaction.reply({ content: 'Suggestion channel is not configured for this server. Please ask an admin to set it up using `/set channels`.', ephemeral: true });

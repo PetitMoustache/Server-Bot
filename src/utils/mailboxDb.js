@@ -1,79 +1,75 @@
-const fs = require('fs');
-const path = require('path');
+const User = require("../models/User");
 
-const file = path.join(__dirname, '..', 'data', 'mailbox.json');
+/**
+ * 📬 MAILBOX DATABASE SERVICE (MongoDB Migration)
+ */
 
-function load() {
-    if (!fs.existsSync(file)) fs.writeFileSync(file, '{}');
+async function addMessage(userId, guildId, type, content, senderId = 'System', subject = 'No Subject') {
     try {
-        return JSON.parse(fs.readFileSync(file));
-    } catch (e) {
-        return {};
+        let user = await User.findOne({ userId, guildId });
+        if (!user) {
+            user = await User.create({ userId, guildId });
+        }
+
+        user.mailbox.push({
+            id: Math.random().toString(36).substr(2, 9),
+            senderId,
+            subject,
+            type,
+            content,
+            timestamp: Date.now(),
+            status: 'unread'
+        });
+
+        await user.save();
+        return true;
+    } catch (err) {
+        console.error(`[MAILBOX DB] Error adding message for ${userId}:`, err);
+        return false;
     }
 }
 
-function save(data) {
-    fs.writeFileSync(file, JSON.stringify(data, null, 2));
+async function getMessages(userId, guildId) {
+    const user = await User.findOne({ userId, guildId });
+    return user?.mailbox || [];
 }
 
-function addMessage(userId, guildId, type, content, senderId = 'System', subject = 'No Subject') {
-    const db = load();
-    if (!db[userId]) db[userId] = {};
-    if (!db[userId][guildId]) db[userId][guildId] = [];
-    
-    db[userId][guildId].push({
-        id: Math.random().toString(36).substr(2, 9),
-        senderId,
-        subject,
-        type,
-        content,
-        timestamp: Date.now(),
-        status: 'unread'
-    });
-    save(db);
-}
-
-function getMessages(userId, guildId) {
-    const db = load();
-    return db[userId]?.[guildId] || [];
-}
-
-function markAllAsRead(userId, guildId) {
-    const db = load();
-    if (db[userId]?.[guildId]) {
-        db[userId][guildId].forEach(m => m.status = 'read');
-        save(db);
+async function markAllAsRead(userId, guildId) {
+    const user = await User.findOne({ userId, guildId });
+    if (user) {
+        user.mailbox.forEach(m => m.status = 'read');
+        await user.save();
     }
 }
 
-function clearMailbox(userId, guildId) {
-    const db = load();
-    if (db[userId]?.[guildId]) {
-        db[userId][guildId] = [];
-        save(db);
+async function clearMailbox(userId, guildId) {
+    const user = await User.findOne({ userId, guildId });
+    if (user) {
+        user.mailbox = [];
+        await user.save();
     }
 }
 
-function deleteMessage(userId, guildId, messageId) {
-    const db = load();
-    if (db[userId]?.[guildId]) {
-        db[userId][guildId] = db[userId][guildId].filter(m => m.id !== messageId);
-        save(db);
+async function deleteMessage(userId, guildId, messageId) {
+    const user = await User.findOne({ userId, guildId });
+    if (user) {
+        user.mailbox = user.mailbox.filter(m => m.id !== messageId);
+        await user.save();
     }
 }
 
-function getMessageById(userId, guildId, messageId) {
-    const db = load();
-    return db[userId]?.[guildId]?.find(m => m.id === messageId);
+async function getMessageById(userId, guildId, messageId) {
+    const user = await User.findOne({ userId, guildId });
+    return user?.mailbox.find(m => m.id === messageId);
 }
 
-function markAsRead(userId, guildId, messageId) {
-    const db = load();
-    if (db[userId]?.[guildId]) {
-        const message = db[userId][guildId].find(m => m.id === messageId);
+async function markAsRead(userId, guildId, messageId) {
+    const user = await User.findOne({ userId, guildId });
+    if (user) {
+        const message = user.mailbox.find(m => m.id === messageId);
         if (message) {
             message.status = 'read';
-            save(db);
+            await user.save();
         }
     }
 }

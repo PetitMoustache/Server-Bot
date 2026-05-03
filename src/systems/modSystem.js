@@ -2,6 +2,8 @@ const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const logger = require('../utils/logger');
 const { sendToMailbox } = require('../utils/mailboxHelper');
 const mutesDb = require('../utils/mutes');
+const { isModerator } = require('../utils/permHelper');
+const { load } = require('../database/db');
 
 async function mute(interaction) {
     const client = interaction.client;
@@ -9,9 +11,12 @@ async function mute(interaction) {
     const durationStr = interaction.options.getString('time');
     const reason = interaction.options.getString('reason') || 'No reason provided';
 
-    if (!interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+    const db = load("guilds");
+
+    if (!isModerator(interaction.member, db, interaction.guild.id)) {
         return interaction.reply({ content: '❌ You do not have permission to use this command.', ephemeral: true });
     }
+
 
     if (!target) {
         return interaction.reply({ content: '❌ User not found in this server.', ephemeral: true });
@@ -21,7 +26,7 @@ async function mute(interaction) {
         return interaction.reply({ content: '❌ You cannot mute yourself!', ephemeral: true });
     }
 
-    if (target.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+    if (isModerator(target, db, interaction.guild.id)) {
         return interaction.reply({ content: '❌ You cannot mute other staff members!', ephemeral: true });
     }
 
@@ -99,9 +104,12 @@ async function unmute(interaction) {
     const target = interaction.options.getMember('target');
     const reason = interaction.options.getString('reason') || 'No reason provided';
 
-    if (!interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+    const db = load("guilds");
+
+    if (!isModerator(interaction.member, db, interaction.guild.id)) {
         return interaction.reply({ content: '❌ You do not have permission to use this command.', ephemeral: true });
     }
+
 
     if (!target) {
         return interaction.reply({ content: '❌ User not found in this server.', ephemeral: true });

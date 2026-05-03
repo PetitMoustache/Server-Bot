@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const { load, save } = require("../../database/db");
+const User = require("../../models/User");
 const logger = require("../../utils/logger");
 const { sendToMailbox } = require("../../utils/mailboxHelper");
 
@@ -22,11 +22,7 @@ module.exports = {
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
-    const db = load("guilds");
     const guildId = interaction.guild.id;
-
-    if (!db[guildId]) db[guildId] = { settings: {}, tickets: [], members: {} };
-    if (!db[guildId].members) db[guildId].members = {};
 
     // GIVE REP
     if (sub === "give") {
@@ -54,12 +50,13 @@ module.exports = {
 
       cooldown.set(key, now);
 
-      if (!db[guildId].members[target.id]) {
-        db[guildId].members[target.id] = { xp: 0, level: 1, rep: 0 };
+      let user = await User.findOne({ userId: target.id, guildId });
+      if (!user) {
+        user = await User.create({ userId: target.id, guildId });
       }
 
-      db[guildId].members[target.id].rep = (db[guildId].members[target.id].rep || 0) + 1;
-      save("guilds", db);
+      user.rep = (user.rep || 0) + 1;
+      await user.save();
 
       // LOGGING
       await logger.logAction(interaction.client, "Reputation Given", target, giver, "+1 Reputation point", interaction.guild);
@@ -73,7 +70,8 @@ module.exports = {
     // VIEW REP
     if (sub === "view") {
       const target = interaction.options.getUser("user") || interaction.user;
-      const rep = db[guildId]?.members?.[target.id]?.rep || 0;
+      const user = await User.findOne({ userId: target.id, guildId });
+      const rep = user?.rep || 0;
 
       const embed = new EmbedBuilder()
         .setTitle(`⭐ Reputation: ${target.username}`)
