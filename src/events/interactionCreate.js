@@ -53,9 +53,24 @@ module.exports = {
             if (interaction.customId.startsWith('mail_')) {
                 // handle mailbox buttons...
             }
+        // 3. Modals
+        else if (interaction.isModalSubmit()) {
+            if (interaction.customId.startsWith('mail_modal_')) {
+                const targetId = interaction.customId.split('_')[2];
+                const subject = interaction.fields.getTextInputValue('subject');
+                const content = interaction.fields.getTextInputValue('message');
+
+                const { sendToMailbox } = require('../utils/mailboxHelper');
+                const success = await sendToMailbox(interaction.guild, { id: targetId }, "Direct Message", content, "#5865F2", interaction.user.id, subject);
+
+                if (success) {
+                    return interaction.reply({ content: "✅ Message sent successfully and saved in database.", ephemeral: true });
+                } else {
+                    return interaction.reply({ content: "❌ Error sending message. Make sure the user has a mailbox channel.", ephemeral: true });
+                }
+            }
         }
     }
-
-
 };
+
 
