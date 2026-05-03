@@ -1,1 +1,37 @@
-{}
+{
+  "1482493158276333811": {
+    "1487151991145763009": [
+      {
+        "id": "yzloktd0q",
+        "senderId": "1449155246663405760",
+        "subject": "Testeo de PVP",
+        "type": "Direct Message",
+        "content": "test del bot 1",
+        "timestamp": 1777832577681,
+        "status": "unread"
+      }
+    ]
+  },
+  "1449155246663405760": {
+    "1487151991145763009": [
+      {
+        "id": "12g1csj13",
+        "senderId": "1482493158276333811",
+        "subject": "Test",
+        "type": "Direct Message",
+        "content": "ABC test",
+        "timestamp": 1777832354887,
+        "status": "unread"
+      },
+      {
+        "id": "3dhprhgyk",
+        "senderId": "1482493158276333811",
+        "subject": "MinecraftDonutSMP",
+        "type": "Direct Message",
+        "content": "hola que vamos a hacer en el smp de la dona",
+        "timestamp": 1777832577337,
+        "status": "unread"
+      }
+    ]
+  }
+}

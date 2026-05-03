@@ -1,4 +1,4 @@
-const db = require('./db');
+const db = require('../database/db');
 
 module.exports = {
     updateStats: async (client, guildId = null) => {
@@ -11,9 +11,6 @@ module.exports = {
             if (!settings.statsEnabled) continue;
 
             try {
-                // Fetch members to ensure presence data is available
-                // Note: For very large servers, this might be heavy, but it's needed for Online count.
-                // We only do this if online channel is configured.
                 if (settings.statsOnlineChannelId) {
                     await guild.members.fetch();
                 }
@@ -23,7 +20,6 @@ module.exports = {
                     m.presence && (m.presence.status === 'online' || m.presence.status === 'idle' || m.presence.status === 'dnd')
                 ).size;
 
-                // Update Total Channel
                 if (settings.statsTotalChannelId) {
                     const totalChannel = guild.channels.cache.get(settings.statsTotalChannelId);
                     if (totalChannel) {
@@ -34,7 +30,6 @@ module.exports = {
                     }
                 }
 
-                // Update Online Channel
                 if (settings.statsOnlineChannelId) {
                     const onlineChannel = guild.channels.cache.get(settings.statsOnlineChannelId);
                     if (onlineChannel) {
@@ -45,7 +40,7 @@ module.exports = {
                     }
                 }
             } catch (error) {
-                console.error(`Error updating stats for guild ${guild.id}:`, error);
+                console.error(`[STATS ERROR] Guild ${guild.id}:`, error);
             }
         }
     }

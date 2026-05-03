@@ -1,12 +1,15 @@
 const { Events } = require('discord.js');
 const statsUpdater = require('../utils/statsUpdater');
 const db = require('../database/db');
+const logger = require('../utils/logger');
+const { sendToMailbox } = require('../utils/mailboxHelper');
+const mutesDb = require('../utils/mutes');
 
 module.exports = {
     name: Events.ClientReady,
     once: true,
     async execute(client) {
-        console.log(`Ready! Logged in as ${client.user.tag}`);
+        console.log(`[BOT] Ready! Logged in as ${client.user.tag}`);
 
         // Initial update
         await statsUpdater.updateStats(client);
@@ -18,13 +21,10 @@ module.exports = {
 
         // ⏱️ REAL-TIME AUTOMATION SYSTEM (Check every 30 seconds)
         setInterval(async () => {
-            // 1. AUTO UNMUTE
-            const mutesDb = require('../utils/mutes');
-            const { sendToMailbox } = require('../utils/mailboxHelper');
-            const logger = require('../utils/logger');
-            const allMutes = mutesDb.load();
             const now = Date.now();
 
+            // 1. AUTO UNMUTE
+            const allMutes = mutesDb.load();
             for (const mute of allMutes) {
                 if (now >= mute.expiresAt) {
                     const guild = client.guilds.cache.get(mute.guildId);
@@ -35,41 +35,43 @@ module.exports = {
 
                     if (member && muteRole && member.roles.cache.has(muteRole.id)) {
                         await member.roles.remove(muteRole, 'Mute expired (Auto)');
-                        await sendToMailbox(guild, member.user, '🔊 UNMUTE NOTICE', 'Your mute duration has expired. You have been unmuted.', 'Green');
+                        await sendToMailbox(guild, member.user, 'Moderation', '🔊 **Your mute duration has expired.** You have been unmuted.', 'Green', 'System', 'Mute Expired 🔊');
                         await logger.logAction(client, 'Auto Unmute', member.user, client.user, 'Duration expired', guild);
                     }
                     mutesDb.removeMute(mute.userId, mute.guildId);
                 }
             }
 
-            // 2. TICKET AUTO-ESCALATION
-            const fs = require('fs');
-            const path = require('path');
-            const ticketsPath = path.join(__dirname, '..', 'data', 'tickets.json');
-            if (fs.existsSync(ticketsPath)) {
-                try {
-                    const ticketsData = JSON.parse(fs.readFileSync(ticketsPath));
-                    let changed = false;
-                    for (const guildId in ticketsData) {
-                        const guild = client.guilds.cache.get(guildId);
-                        if (!guild) continue;
-                        const guildSettings = require('../database/db').getSettings(guildId);
-                        for (const ticketId in ticketsData[guildId]) {
-                            const ticket = ticketsData[guildId][ticketId];
-                            if (ticket.status === 'pending' && now - ticket.createdAt > 10 * 60 * 1000 && !ticket.escalated) {
-                                ticket.escalated = true;
-                                changed = true;
-                                const ticketsChannel = guild.channels.cache.get(guildSettings.ticketsChannel) || guild.channels.cache.find(c => c.name === 'tickets');
-                                if (ticketsChannel) {
-                                    await ticketsChannel.send(`🚨 **TICKET ESCALATED:** Ticket **#${ticketId}** from <@${ticket.userId}> has been unanswered for 10 minutes! <@&${guildSettings.modRole || ""}> <@&${guildSettings.supportRole || ""}>`);
-                                }
-                                await logger.logAction(client, 'Ticket Escalated', { tag: ticketId }, client.user, `Ticket #${ticketId} marked as ESCALATED due to inactivity.`, guild);
-                            }
+            // 2. TICKET AUTO-ESCALATION (from guilds.json)
+            const guildsData = db.load("guilds");
+            let changed = false;
+
+            for (const guildId in guildsData) {
+                const guild = client.guilds.cache.get(guildId);
+                if (!guild || !guildsData[guildId].tickets) continue;
+
+                const settings = guildsData[guildId].settings || {};
+                
+                for (const ticket of guildsData[guildId].tickets) {
+                    // Escalate if pending and older than 10 minutes
+                    if (ticket.status === 'pending' && now - ticket.createdAt > 10 * 60 * 1000 && !ticket.escalated) {
+                        ticket.escalated = true;
+                        changed = true;
+
+                        const ticketsChannel = guild.channels.cache.get(settings.ticketsChannel) || 
+                                             guild.channels.cache.find(c => c.name.toLowerCase() === 'tickets');
+                        
+                        if (ticketsChannel) {
+                            await ticketsChannel.send(`🚨 **TICKET ESCALATED:** Ticket **#${ticket.id}** from <@${ticket.userId}> has been unanswered for 10 minutes!`);
                         }
+                        
+                        await logger.logAction(client, 'Ticket Escalated', { id: ticket.userId, tag: `Ticket #${ticket.id}` }, client.user, `Inactivity escalation for #${ticket.id}`, guild);
                     }
-                    if (changed) fs.writeFileSync(ticketsPath, JSON.stringify(ticketsData, null, 2));
-                } catch (e) { console.error('Escalation error:', e); }
+                }
             }
+
+            if (changed) db.save("guilds", guildsData);
+
         }, 30 * 1000);
     },
 };

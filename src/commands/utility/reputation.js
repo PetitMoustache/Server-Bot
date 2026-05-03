@@ -1,5 +1,7 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const { load, save } = require("../../database/db");
+const logger = require("../../utils/logger");
+const { sendToMailbox } = require("../../utils/mailboxHelper");
 
 const cooldown = new Map();
 
@@ -28,26 +30,26 @@ module.exports = {
 
     // GIVE REP
     if (sub === "give") {
-      const giver = interaction.user.id;
+      const giver = interaction.user;
       const target = interaction.options.getUser("user");
 
       if (target.bot) {
-        return interaction.reply({ content: "You can't give reputation to bots!", ephemeral: true });
+        return interaction.reply({ content: "❌ You can't give reputation to bots!", ephemeral: true });
       }
 
-      if (giver === target.id) {
-        return interaction.reply({ content: "You can't give reputation to yourself!", ephemeral: true });
+      if (giver.id === target.id) {
+        return interaction.reply({ content: "❌ You can't give reputation to yourself!", ephemeral: true });
       }
 
       // cooldown 1 por día
-      const key = `${giver}_${guildId}`;
+      const key = `${giver.id}_${guildId}`;
       const now = Date.now();
 
       if (cooldown.has(key) && now - cooldown.get(key) < 86400000) {
         const remaining = 86400000 - (now - cooldown.get(key));
         const hours = Math.floor(remaining / 3600000);
         const minutes = Math.floor((remaining % 3600000) / 60000);
-        return interaction.reply({ content: `You already gave reputation today ⏳\nWait: **${hours}h ${minutes}m**`, ephemeral: true });
+        return interaction.reply({ content: `⏳ You already gave reputation today.\nTry again in **${hours}h ${minutes}m**.`, ephemeral: true });
       }
 
       cooldown.set(key, now);
@@ -57,10 +59,15 @@ module.exports = {
       }
 
       db[guildId].members[target.id].rep = (db[guildId].members[target.id].rep || 0) + 1;
-
       save("guilds", db);
 
-      return interaction.reply(`⭐ **+1 reputation** to ${target.username}!`);
+      // LOGGING
+      await logger.logAction(interaction.client, "Reputation Given", target, giver, "+1 Reputation point", interaction.guild);
+
+      // MAILBOX
+      await sendToMailbox(interaction.guild, target, "Reputation", `⭐ **${giver.tag}** gave you +1 reputation point!`, "Gold", giver.id, "You received reputation! ⭐");
+
+      return interaction.reply(`⭐ **+1 reputation** given to **${target.username}**!`);
     }
 
     // VIEW REP
@@ -68,7 +75,13 @@ module.exports = {
       const target = interaction.options.getUser("user") || interaction.user;
       const rep = db[guildId]?.members?.[target.id]?.rep || 0;
 
-      return interaction.reply(`⭐ **${target.username}** has **${rep}** reputation.`);
+      const embed = new EmbedBuilder()
+        .setTitle(`⭐ Reputation: ${target.username}`)
+        .setDescription(`Current Reputation: **${rep}** points.`)
+        .setColor("Gold")
+        .setThumbnail(target.displayAvatarURL());
+
+      return interaction.reply({ embeds: [embed] });
     }
   }
 };

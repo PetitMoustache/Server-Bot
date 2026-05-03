@@ -66,7 +66,7 @@ function checkAbuse(interaction, type, content) {
             .setTimestamp();
 
         // Send to logs channel
-        const db = require('./db');
+        const db = require('../database/db');
         const settings = db.getSettings(interaction.guild.id);
         const logsChannel = interaction.guild.channels.cache.get(settings.logsChannel);
         if (logsChannel) logsChannel.send({ embeds: [staffEmbed] });

@@ -1,5 +1,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits } = require("discord.js");
-const { load, save } = require("../database/db");
+const { load, save, getSettings } = require("../database/db");
+const logger = require("../utils/logger");
+const { sendToMailbox } = require("../utils/mailboxHelper");
 
 /**
  * 🎫 TICKET SYSTEM - LOGIC LAYER
@@ -14,6 +16,15 @@ async function open(interaction) {
     if (!db[guild.id]) db[guild.id] = { settings: {}, tickets: [] };
     const settings = db[guild.id].settings || {};
     
+    // VALIDATION: No duplicar tickets
+    const existingTicket = db[guild.id].tickets?.find(t => t.userId === interaction.user.id && (t.status === "pending" || t.status === "active"));
+    if (existingTicket) {
+        return interaction.reply({ 
+            content: `❌ **You already have an open ticket!** (#${existingTicket.id})\nWait for staff to respond or close your current ticket.`, 
+            ephemeral: true 
+        });
+    }
+
     // 1. Buscar canal de destino
     let channelId = settings.ticketsChannel;
     let targetChannel = guild.channels.cache.get(channelId);
@@ -73,6 +84,9 @@ async function open(interaction) {
         });
         save("guilds", db);
 
+        // LOGGING
+        await logger.logAction(interaction.client, "Ticket Opened", interaction.user, interaction.user, `Ticket #${ticketId} created. Reason: ${reason}`, guild);
+
         return interaction.reply({ 
             content: `✅ **Success!** Your ticket (#${ticketId}) has been sent to the staff.`, 
             ephemeral: true 
@@ -98,6 +112,11 @@ async function close(interaction) {
     // Si estamos en un canal de ticket, podemos intentar borrarlo
     if (interaction.channel.name.includes("ticket-")) {
         await interaction.reply("🔒 Closing ticket in 5 seconds...");
+        
+        // LOGGING
+        const targetUser = await interaction.client.users.fetch(ticket.userId).catch(() => null);
+        await logger.logAction(interaction.client, "Ticket Closed", targetUser || { id: ticket.userId, tag: "Unknown" }, interaction.user, `Ticket #${id} closed.`, interaction.guild);
+
         setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
     } else {
         return interaction.reply({ content: `✅ Ticket #${id} marked as closed.`, ephemeral: true });
@@ -175,10 +194,16 @@ async function handleButtons(interaction) {
                 components: [row] 
             });
 
-            await interaction.editReply(`✅ Ticket aceptado: ${channel}`);
+            await interaction.editReply(`✅ **Ticket accepted!** Access it here: ${channel}`);
             
             // Quitar botones del mensaje original de staff
             await interaction.message.edit({ components: [] }).catch(() => {});
+
+            // LOGGING
+            await logger.logAction(interaction.client, "Ticket Accepted", member.user, interaction.user, `Ticket #${ticketId} accepted by staff.`, guild);
+            
+            // MAILBOX
+            await sendToMailbox(guild, member.user, "Ticket", `Your ticket **#${ticketId}** has been accepted by **${interaction.user.tag}**.\n\nChannel: ${channel}`, "Green", interaction.user.id, "Ticket Accepted ✅");
 
         } catch (err) {
             console.error("[TICKET] Failed to create channel:", err);
@@ -194,7 +219,16 @@ async function handleButtons(interaction) {
             save("guilds", db);
         }
         await interaction.message.delete().catch(() => {});
-        await interaction.editReply("❌ Ticket denied and removed.");
+        await interaction.editReply("❌ **Ticket denied.** The user has been notified.");
+
+        // LOGGING
+        const member = await guild.members.fetch(userId).catch(() => null);
+        await logger.logAction(interaction.client, "Ticket Denied", member?.user || { id: userId, tag: "Unknown" }, interaction.user, `Ticket #${ticketId} denied.`, guild);
+
+        // MAILBOX
+        if (member) {
+            await sendToMailbox(guild, member.user, "Ticket", `Your ticket **#${ticketId}** was denied by staff.`, "Red", interaction.user.id, "Ticket Denied ❌");
+        }
     }
 
     // 3. CERRAR TICKET (Boton dentro del canal)
@@ -212,9 +246,13 @@ async function handleButtons(interaction) {
         }
 
         await interaction.editReply("🔒 **Closing ticket in 5 seconds...**");
+        
+        // LOGGING
+        const targetUser = t ? await interaction.client.users.fetch(t.userId).catch(() => null) : null;
+        await logger.logAction(interaction.client, "Ticket Closed", targetUser || { id: "Unknown", tag: "Unknown" }, interaction.user, `Ticket #${userId} closed.`, guild);
+
         setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
     }
 }
-
 
 module.exports = { open, close, list, handleButtons };

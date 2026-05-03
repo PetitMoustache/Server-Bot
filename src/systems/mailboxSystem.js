@@ -1,4 +1,3 @@
-const { load, save } = require("../database/db");
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
 /**
@@ -42,21 +41,72 @@ async function compose(interaction) {
     await interaction.showModal(modal);
 }
 
-// Función para guardar mensajes físicamente
-function saveMessage(fromId, toId, subject, content) {
-    const db = load("mailbox");
-    if (!db[toId]) db[toId] = [];
-    
-    db[toId].push({
-        id: Math.random().toString(36).slice(2, 9).toUpperCase(),
-        fromId,
-        subject,
-        content,
-        timestamp: Date.now(),
-        read: false
-    });
-    
-    save("mailbox", db);
+async function read(interaction) {
+    const { createInbox } = require('../utils/mailboxHelper');
+    const inbox = createInbox(interaction.user, interaction.guild);
+    return interaction.reply({ ...inbox, ephemeral: true });
 }
 
-module.exports = { open, compose, saveMessage };
+async function handleButtons(interaction) {
+    const { createDashboard, createInbox, createMessageView } = require('../utils/mailboxHelper');
+    const mailboxDb = require('../utils/mailboxDb');
+    const [prefix, action, extra] = interaction.customId.split('_');
+
+    if (action === 'dash') {
+        const dashboard = createDashboard(interaction.user, interaction.guild);
+        return interaction.update(dashboard);
+    }
+
+    if (action === 'inbox') {
+        const page = parseInt(extra) || 0;
+        const inbox = createInbox(interaction.user, interaction.guild, page);
+        return interaction.update(inbox);
+    }
+
+    if (action === 'compose') {
+        return interaction.reply({ content: '✍️ To send a message, please use `/mailbox compose target:@user`', ephemeral: true });
+    }
+
+    if (action === 'clear') {
+        mailboxDb.clearMailbox(interaction.user.id, interaction.guild.id);
+        const dashboard = createDashboard(interaction.user, interaction.guild);
+        return interaction.update(dashboard);
+    }
+
+    if (action === 'delete') {
+        mailboxDb.deleteMessage(interaction.user.id, interaction.guild.id, extra);
+        const inbox = createInbox(interaction.user, interaction.guild, 0);
+        return interaction.update(inbox);
+    }
+
+    if (action === 'reply') {
+        const target = await interaction.client.users.fetch(extra).catch(() => null);
+        if (!target) return interaction.reply({ content: '❌ User not found.', ephemeral: true });
+
+        const { compose } = require('./mailboxSystem');
+        const mockInteraction = {
+            ...interaction,
+            options: { getUser: () => target },
+            showModal: (modal) => interaction.showModal(modal)
+        };
+        return compose(mockInteraction);
+    }
+}
+
+async function handleSelectMenu(interaction) {
+    const { createMessageView } = require('../utils/mailboxHelper');
+    const mailboxDb = require('../utils/mailboxDb');
+    
+    if (interaction.customId === 'mail_view_select') {
+        const messageId = interaction.values[0];
+        const message = mailboxDb.getMessageById(interaction.user.id, interaction.guild.id, messageId);
+        
+        if (!message) return interaction.reply({ content: '❌ Message not found.', ephemeral: true });
+
+        mailboxDb.markAsRead(interaction.user.id, interaction.guild.id, messageId);
+        const view = createMessageView(message);
+        return interaction.update(view);
+    }
+}
+
+module.exports = { open, compose, read, handleButtons, handleSelectMenu };

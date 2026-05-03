@@ -1,32 +1,34 @@
 const { EmbedBuilder } = require('discord.js');
-const db = require('./db');
+const db = require('../database/db');
 
 module.exports = {
     logAction: async (client, action, user, moderator, reason, guild) => {
         const settings = db.getSettings(guild.id);
         const logChannelId = settings.logsChannel;
+        
         if (!logChannelId) {
-            console.log(`[Moderation Action] ${action} on ${user.tag} by ${moderator.tag}. Reason: ${reason}`);
+            console.log(`[LOG] ${action}: ${user.tag} by ${moderator.tag}. Reason: ${reason}`);
             return;
         }
 
         try {
-            const logChannel = await guild.channels.fetch(logChannelId);
-            if (logChannel) {
-                const embed = new EmbedBuilder()
-                    .setTitle(`Action: ${action}`)
-                    .setColor('Orange')
-                    .addFields(
-                        { name: 'User', value: `${user} (${user.id})`, inline: true },
-                        { name: 'Moderator', value: `${moderator} (${moderator.id})`, inline: true },
-                        { name: 'Reason', value: reason || 'No reason provided' }
-                    )
-                    .setTimestamp();
-                
-                await logChannel.send({ embeds: [embed] });
-            }
+            const logChannel = await guild.channels.fetch(logChannelId).catch(() => null);
+            if (!logChannel) return;
+
+            const embed = new EmbedBuilder()
+                .setTitle(`📝 Log Action: ${action}`)
+                .setColor('#F1C40F') // Yellow/Gold for logs
+                .addFields(
+                    { name: '👤 Target', value: `${user} (\`${user.id}\`)`, inline: true },
+                    { name: '👮 Moderator', value: `${moderator} (\`${moderator.id}\`)`, inline: true },
+                    { name: '📄 Reason', value: `\`\`\`${reason || 'No reason provided'}\`\`\`` }
+                )
+                .setFooter({ text: `Guild: ${guild.name}`, iconURL: guild.iconURL() })
+                .setTimestamp();
+            
+            await logChannel.send({ embeds: [embed] });
         } catch (error) {
-            console.error('Failed to send log message:', error);
+            console.error('[LOGGER ERROR] Failed to send log:', error);
         }
     }
 };

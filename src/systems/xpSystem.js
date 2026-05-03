@@ -6,13 +6,13 @@ function addXP(userId, guildId) {
   const db = load("guilds");
 
   if (!db[guildId]) {
-    db[guildId] = { settings: {}, xp: {} };
+    db[guildId] = { settings: {}, tickets: [], members: {} };
   }
   
-  if (!db[guildId].xp) db[guildId].xp = {};
+  if (!db[guildId].members) db[guildId].members = {};
 
-  if (!db[guildId].xp[userId]) {
-    db[guildId].xp[userId] = {
+  if (!db[guildId].members[userId]) {
+    db[guildId].members[userId] = {
       xp: 0,
       level: 1,
       rep: 0
@@ -29,7 +29,7 @@ function addXP(userId, guildId) {
 
   xpCooldown.set(key, now);
 
-  const user = db[guildId].xp[userId];
+  const user = db[guildId].members[userId];
 
   const gain = Math.floor(Math.random() * 10) + 5;
   user.xp += gain;

@@ -25,7 +25,7 @@ async function getOrCreateMailbox(guild, user) {
             });
         }
 
-        const db = require('./db');
+        const db = require('../database/db');
         const settings = db.getSettings(guild.id);
         const staffRoles = [settings.modRole, settings.adminRole, settings.supportRole].filter(id => id);
 

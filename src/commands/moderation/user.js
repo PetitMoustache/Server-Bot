@@ -1,10 +1,11 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 const mod = require("../../systems/modSystem");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("user")
     .setDescription("User moderation management")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
     .addSubcommand(s =>
       s.setName("mute")
         .setDescription("Mute a user")
