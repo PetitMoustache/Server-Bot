@@ -15,7 +15,7 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    const db = load("guilds"); // The db tool uses "guilds" etc.
+    const db = load("guilds");
     const guildId = interaction.guild.id;
 
     if (!db[guildId]) db[guildId] = { settings: {}, tickets: [], members: {} };
@@ -25,17 +25,30 @@ module.exports = {
     const logs = interaction.options.getChannel("logs");
     const reports = interaction.options.getChannel("reports");
 
-    let changed = false;
-    if (tickets) { db[guildId].settings.ticketsChannel = tickets.id; changed = true; }
-    if (logs) { db[guildId].settings.logsChannel = logs.id; changed = true; }
-    if (reports) { db[guildId].settings.reportsChannel = reports.id; changed = true; }
+    let summary = [];
+    if (tickets) { 
+        db[guildId].settings.ticketsChannel = tickets.id; 
+        summary.push(`🎫 Tickets: ${tickets}`);
+    }
+    if (logs) { 
+        db[guildId].settings.logsChannel = logs.id; 
+        summary.push(`📜 Logs: ${logs}`);
+    }
+    if (reports) { 
+        db[guildId].settings.reportsChannel = reports.id; 
+        summary.push(`🚨 Reports: ${reports}`);
+    }
 
-    if (changed) {
+    if (summary.length > 0) {
         save("guilds", db);
-        return interaction.reply({ content: "Channels configured successfully ✅", ephemeral: true });
+        return interaction.reply({ 
+            content: `**Configuration Updated ✅**\n${summary.join("\n")}\n\n*All settings saved persistently.*`, 
+            ephemeral: true 
+        });
     } else {
-        return interaction.reply({ content: "Please specify at least one channel to set.", ephemeral: true });
+        return interaction.reply({ content: "❌ Please specify at least one channel to configure.", ephemeral: true });
     }
   }
 };
+
 

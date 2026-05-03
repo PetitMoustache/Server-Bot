@@ -15,12 +15,17 @@ async function open(interaction) {
     const settings = db[guild.id].settings || {};
     
     // 1. Buscar canal de destino
-    const channelId = settings.ticketsChannel;
+    let channelId = settings.ticketsChannel;
     let targetChannel = guild.channels.cache.get(channelId);
+
+    // Fallback: Si no hay canal configurado, buscar uno por nombre
+    if (!targetChannel) {
+        targetChannel = guild.channels.cache.find(c => c.name.toLowerCase() === "tickets" && c.type === ChannelType.GuildText);
+    }
 
     if (!targetChannel) {
         return interaction.reply({ 
-            content: "❌ **Setup Error:** The tickets channel is not configured. Use `/set channel` first.", 
+            content: "❌ **Setup Error:** The tickets channel is not configured and I couldn't find a channel named `#tickets`. Please use `/set channel` and select a channel for tickets.", 
             ephemeral: true 
         });
     }
